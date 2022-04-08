@@ -1,0 +1,141 @@
+---
+title: "SQR"
+output: rmarkdown::html_vignette
+vignette: Smooth Quantile Regression in R A VIGNETTE
+  %\VignetteIndexEntry{GPQR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+knitr::opts_knit$set(global.par = TRUE)
+knitr::opts_chunk$set(fig.width = 7, fig.height = 4)
+```
+
+# Installation
+
+Like many other R packages, the simplest way to obtain SQR is to install it  from github. Type the following command in R console:
+
+```{r setup}
+library(devtools)
+devtools::install_github("https://github.com/ouhourane/SQR.git")
+```
+
+The SmoothSQR algorithm combines the idea of on the approximation of the quantile objective check function, which is not differentiable at zero, by a modified check function which is differentiable at zero, with that of the Majorization Minimization (MM) principale. Then, using the the coordinate descent algorithm to update each coefficient simply and efficiently. We introduce a new R package SmoothSQR which implements a coordinate descent algorithm for computing penalized smooth quantile regression on convex penalties $l_1+l_2$ and the nonconvex penalties SCAD (or MCP) $+l_2$. This package implements k fold cross validation as tuning parameter selection criterion.
+
+This vignette contains only a brief introduction to utilize SmoothSQR  to solve convex and non-convex penalized
+quantile regression under high-dimensional settings. We are given $n$ observations on a real-valued response variable y and a set of p predictors, $x = (x_1, \dots, x_p)$, and we try to infer the relationship between $y$ and 
+$x$. We are interested in identifying and estimating the nonzero component of $\beta$ when $p \gg n$. 
+
+Quantile regression (QR) was developed to analyse the relationship between the conditional quantiles of the response distribution and a set of regressors. The aim of QR is to estimate the parameter vector, $(\beta_0(\tau),\beta(\tau))$, for each quantile $\tau \in(0, 1)$, of a conditional quantile function. The penalized quantile regression estimator for $\beta$ is obtained by minimizing:
+
+$$(\hat{\beta}_0(\tau),\hat{\boldsymbol\beta}_{\tau})=
+\mbox{arg}\min_{\beta_0(\tau),\boldsymbol{\beta}_{\tau}} ~ \frac{1}{n}\sum^{n}_{i=1}\rho_{\tau,*} \{ y_{i}-\beta_0(\tau)-\mathbf{x}_i^{\top}\boldsymbol{\beta}_{\tau}\}
++P_{\lambda_{1},\lambda_{2}}({\boldsymbol\beta}_{\tau}),$$
+
+where $\rho_{\tau,*}(.)$ is a smooth function to approximate the "check function" of the quantile regression  and where $P_{\lambda_{1},\lambda_{2}}$ is the elastic net, Snet (SCAD+$l_2$) or Mnet (Mcp+$l_2$) penalty. 
+
+## Example 1: 
+The diabetes dataset consists of 10 physiological variables (age, sex, weight, blood pressure) measure on 442 patients, and an indication of disease progression after one year. this dataset included in the lars package.  The main function in the package SmoothSQR, it's has many option parameters.
+
+```{r pressure, echo=TRUE}
+### Lasso 
+library(lars)
+data(diabetes)
+attach(diabetes)
+
+par(mfrow = c(1, 3))
+library(SQR)
+### Lasso penalty 
+fit <- SQR(x=diabetes$x,y=diabetes$y,lambda2=0.0,check="f1",taux=0.5, method = "Lasso")
+plot(fit)
+### Scad penalty 
+fit <- SQR(x=diabetes$x,y=diabetes$y,lambda2=0.0,check="f1",taux=0.5, method = "Scad")
+plot(fit)
+### Mcp penalty 
+fit <- SQR(x=diabetes$x,y=diabetes$y,lambda2=0.0,check="f1",taux=0.5, method = "Scad")
+plot(fit)
+```
+
+
+Figure1: Solution paths of the penalized quantile regression on the diabetes data with 442 observations and 10 predictors. Panels, from the left to the right, show the solution paths  SmoothSQR–Elastic net, SmoothSQR–Snet and SmoothSQR–Mnet algorithms, respectively.
+
+## Example 2
+
+To illustrate how this package  works, we use the same setting in 
+Mkhadri et al. (2018). We generated one data sets with $100$ observations and $200$ predictors.
+The $jk$-th elements of $\Sigma$ are given as $0.5^{|j-k|}$, $\sigma=1$ and 
+$$
+\boldsymbol{\beta}=(\underbrace{3,\ldots,3}_{5},\underbrace{-1.5,\ldots,-1.5}_{5},\underbrace{1,\ldots,1}_{5},
+\underbrace{2,\ldots,2}_{5},\textbf{0}_{180}).
+$$
+
+```{r , echo=TRUE}
+library(MASS)
+par(mfrow = c(1, 3))
+p=200
+n=100
+sigma=1
+
+beta=c(3,3,3,3,3,-1.5,-1.5,-1.5,-1.5,-1.5,1,1,1,1,1,-2,-2,-2,-2,-2,rep(0,p-20))
+p <- length(beta)
+MuVec <- rep(0,p)
+v <- rep(1,p)
+corr = 0.8
+SigmaMat<-diag(v)
+for(h in 1:5) 
+  for(j in 1:5){
+    SigmaMat[h,j]<- corr
+    SigmaMat[h,h]<- 1
+  }
+for(h in 6:10)
+  for(j in 6:10){
+    SigmaMat[h,j]<- corr
+    SigmaMat[h,h]<- 1
+  }
+for(h in 11:15)
+  for(j in 11:15){
+    SigmaMat[h,j]<- corr
+    SigmaMat[h,h]<- 1
+  }
+for(h in 16:20)
+  for(j in 16:20){
+    SigmaMat[h,j]<- corr
+    SigmaMat[h,h]<- 1
+  }
+  
+
+X<-mvrnorm(n,MuVec,SigmaMat,tol = 1e-6, empirical = FALSE)
+Y<-X%*%beta + rnorm(n,0,sigma)
+
+cv = cv.SQR(X,Y, K = 5, taux=0.5,lambda2= 0.1, check="f1",method = "Lasso",plot.it=TRUE)
+fit = cv$finalfit
+
+fit <- SQR(X,Y, taux=0.5, lambda2= 0.1,check="f1",method = "Lasso")
+plot(fit)
+
+L1norm=apply(abs(fit$beta),2,sum)
+matplot(L1norm,t(fit$beta)[,1:5], main=expression(paste("SQR1: ",l[1],"+",l[2])),
+  type = "l",lty=1, xlab = "L1 Norm", ylab = expression(hat(beta)(s[1]))
+  ,col=2,ylim=c(-1.5,2.5))
+matlines(L1norm,t(fit$beta)[,6:10], main=expression(paste("SQR1: ",l[1],"+",l[2])),
+  type = "l",lty=1, ylab = expression(hat(beta)(s[1])),col=3)
+matlines(L1norm,t(fit$beta)[,11:15], main=expression(paste("SQR1: ",l[1],"+",l[2])),
+  type = "l",lty=1, ylab = expression(hat(beta)(s[1])),col=4)
+matlines(L1norm,t(fit$beta)[,16:20], main=expression(paste("SQR1: ",l[1],"+",l[2])),
+  type = "l",lty=1, ylab = expression(hat(beta)(s[1])),col=5)
+matlines(L1norm,t(fit$beta)[,21:p], main=expression(paste("SQR1: ",l[1],"+",l[2])),
+  type = "l",lty=1, ylab = expression(hat(beta)(s[1])),col=1)
+```
+
+Then we can compare the coefficient estimates for quantile $\tau = 0.5$. The
+results, actually, are very close to the true parameter. 
+
+References:
+
+Mkhadri A., Ouhourane, M., Oualkacha, K. (2016). A coordinate descent algorithm for computing penalized smooth quantile regression.  Statistics and Computing, doi:10.1007/s11222-016-9659-9.
+

@@ -10,3 +10,7 @@ Description: This package implements a generalized coordinate descent (GCD) algo
 License: GPL-2
 NeedsCompilation: yes
 Packaged: 2015-07-02 15:21:04 UTC; mohamed
+Suggests: 
+    rmarkdown,
+    knitr
+VignetteBuilder: knitr
